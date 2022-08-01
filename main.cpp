@@ -19,15 +19,14 @@ struct ParConfig{
     MStructure fStructure = EStructureSymmetric;
     MProperty fProperty = EIndefinite;
     
-    std::vector<int64_t>  fIA;
-    std::vector<int64_t>  fJA;
+    std::vector<long long>  fIA;
+    std::vector<long long>  fJA;
     std::vector<double> fA;
     std::vector<double> frhs;
     
     long long *fPardisoControl[64];
     
     // adress of the first element of pt;
-    
     void *fHandle[64];
     //long long *fHandle;
     //_MKL_DSS_HANDLE_t fHandle;
@@ -40,7 +39,7 @@ struct ParConfig{
     long long fMax_num_factors = 1;
     
     // Factor number we are using
-    long long fMatrix_num = 1;
+    long long int fMatrix_num = 1;
     
     // Message level information
     long long fMessageLevel=1;
@@ -64,13 +63,15 @@ struct ParConfig{
 template <class TVar>
 void PrintArray(TVar *it,long long size,int n=5, std::string arrayName="vector"/*ArrayType=EVector*/);
 void FilliParm(ParConfig &parconf,bool usingCGS);
+template <class TVar>
+void CheckConsistency(std::vector<TVar> vector, std::string name );
 
 int main(int argc, const char * argv[]) {
     
-    std::string pathtofileA="/Users/labcc1/Documents/projectsC++/PardisoTest/PardisoTest/fMatrix.txt";
-    std::string pathtofilerhs="/Users/labcc1/Documents/projectsC++/PardisoTest/PardisoTest/frhs.txt";
+    std::string pathtofileA="/home/ricardo/testpardiso/PardisoTest/fMatrix_ref9.txt";
+    std::string pathtofilerhs="/home/ricardo/testpardiso/PardisoTest/frhs_ref9.txt";
     bool usingCGS=true;
-    
+     
     ParConfig parconf;
     long long parCtrl[64];
     for(int i=0;i<64;i++){
@@ -78,12 +79,14 @@ int main(int argc, const char * argv[]) {
        parconf.fParam[i]=0;
         
     }
-    FilliParm(parconf,usingCGS);
     
+    FilliParm(parconf,usingCGS);
+   
     for (int i = 0; i < 64; i++ )
         {
             parconf.fHandle[i] = 0;
         }
+        
     //Read matrix A
     std::ifstream matrixFile;
     matrixFile.open(pathtofileA);
@@ -145,27 +148,53 @@ int main(int argc, const char * argv[]) {
         parconf.frhs.push_back(elrhs);
         lineCounter++;
     }
-    std::cout << "Stop reading matrix b\n";
-
-    parconf.fIA.resize(ARows+1);
-    // std::vector might create fragmented memory
-    //int64_t  fIAarray[ARows+1];
-    //int64_t  fJAarray[parconf.fA.size()];
-    //double fAarray[(int)(parconf.fA.size())];
-    //double frhsarray[ARows];
     
-    {
-        for(int ii=0; ii<parconf.fA.size(); ii++ ){
-            if(ii<ARows+1){
-                if(ii<ARows){
-                    int xx=1;
-                    //frhsarray[ii]=parconf.frhs[ii];
-                }
-                //fIAarray[ii]=parconf.fIA[ii];
+    std::cout << "Stop reading matrix b\n";
+    
+    parconf.fIA.resize(ARows+1);
+    
+    if(0){
+      int rhsnorm1=0;
+    for (int ii=0; ii<parconf.frhs.size();ii++){
+      rhsnorm1+=abs(parconf.frhs[ii]);
+    }
+    std::cout << "rhsnorm1=\t" << rhsnorm1 << "\tparconf.frhs.size()=\t" << parconf.frhs.size() << std::endl;
+    
+    int fAnorm1=0;
+    for (int ii=0; ii<parconf.fA.size();ii++){
+      fAnorm1+=abs(parconf.fA[ii]);
+    }
+      
+      CheckConsistency<double>( parconf.frhs,  "rhs" );
+      CheckConsistency<long long>( parconf.fIA,  "IA" );
+      CheckConsistency<double>( parconf.fA,  "A" );
+      CheckConsistency<long long>( parconf.fJA,  "JA" );
+      
+      std::cout << "parconf.fA.size():\t"<< parconf.fA.size() << std::endl;
+      std::cout << "parconf.fIA.size():\t"<< parconf.fIA.size() << std::endl;
+      std::cout << "parconf.fJA.size():\t"<< parconf.fJA.size() << std::endl;
+      
+      double JAnorm1=0;
+      double IAnorm1=0;
+      double IAmax=0;
+      double JAmax=0;
+      for(long long i=0; i< parconf.fJA.size(); i++){
+          long long currentJA = abs(parconf.fJA[i]);
+          JAnorm1+=currentJA;
+          if(currentJA>JAmax)
+            JAmax=currentJA;
+          if(i<parconf.fIA.size()){
+            long long currentIA = abs(parconf.fIA[i]);
+            IAnorm1+=abs(parconf.fIA[i]);
+            if(currentIA>IAmax)
+              IAmax=currentIA;
             }
-            //fJAarray[ii]=parconf.fJA[ii];
-            //fAarray[ii]=parconf.fA[ii];
-        }
+      }
+      std::cout << "JAnorm1=\t" << JAnorm1 << std::endl;
+      std::cout << "IAnorm1=\t" << IAnorm1 << std::endl;
+      std::cout << "JAmax=\t" << JAmax << std::endl;
+      std::cout << "IAmax=\t" << IAmax << std::endl;
+      return 0;
     }
     
     std::cout << "linecounter=\t" << lineCounter <<std::endl;
@@ -173,7 +202,7 @@ int main(int argc, const char * argv[]) {
         std::cout << "parconf.frhs.size():\t" << parconf.frhs.size() << "\n" << "ARows:\t" << ARows << std::endl;
         if(parconf.frhs.size() != ARows){
             std::cout << "Error" <<std::endl;
-            return;
+            return -1;
         }
     }
         
@@ -190,13 +219,9 @@ int main(int argc, const char * argv[]) {
         double bval = 0., xval = 0.;
         double *a,*b = &bval, *x = &xval;
         long long *ia,*ja;
-       
-        std::cout << "parconf.fIA.size():\t" << parconf.fIA.size()<<std::endl;
-        std::cout << "parconf.fJA.size():\t" << parconf.fJA.size()<<std::endl;
-        std::cout << "parconf.fA.size():\t" << parconf.fA.size()<<std::endl;
         
         if (parconf.fA.size()==0) {
-            return;
+            return -1;
         }
         
         a = &(parconf.fA[0]);
@@ -215,7 +240,7 @@ int main(int argc, const char * argv[]) {
         
         
         /// analyse and factor the equations
-        long long phase = 12;
+        const long long int phase = 12;
         for (long long i=0; i<n; i++) {
            parconf.fPermutation[i] = i;
         }
@@ -226,17 +251,15 @@ int main(int argc, const char * argv[]) {
         PrintArray<long long>(parconf.fParam,64,16, "fParam");
         
         std::cout << "pardiso_64" <<std::endl;
-        pardiso_64(parconf.fHandle,  &parconf.fMax_num_factors, &parconf.fMatrix_num, &parconf.fMatrixType, &phase, &n, &parconf.fA[0],&parconf.fIA[0], &parconf.fJA[0], perm /*&idumgit*/,
-                    &nrhs, &parconf.fParam[0] /*iparm*/, &parconf.fMessageLevel,&parconf.frhs[0], x, &Error);
+        pardiso_64(parconf.fHandle,  &parconf.fMax_num_factors, &parconf.fMatrix_num, &parconf.fMatrixType, &phase, &n, &parconf.fA[0],&parconf.fIA[0], &parconf.fJA[0], perm /*&idumgit*/, &nrhs, &parconf.fParam[0] /*iparm*/, &parconf.fMessageLevel,&parconf.frhs[0], x, &Error);
 
-        
         if (Error) {
             parconf.Error_check(int(Error));
             return -1;
         }
         if (Error) {
             std::cout << __PRETTY_FUNCTION__ << " error code " << Error << std::endl;
-            return;
+            return -1;
         }
     }
    
@@ -436,6 +459,18 @@ void PrintArray(TVar *it,long long size, int n, std::string arrayName /*ArrayTyp
     }
     std::cout << "}\n";
     return;
+}
+
+template <class TVar>
+void CheckConsistency(std::vector<TVar> vector, std::string name ){
+    TVar *rhsPointer=&vector[0];
+    for(int ii=0; ii<vector.size()-2; ii++){
+       rhsPointer++;  
+    }
+    std::cout << "\n "<< name <<" vector:\t" <<  vector[vector.size()-2] << "\t" << vector[vector.size()-1] << "\n";
+    std::cout << name << " Pointer:\t" <<  *rhsPointer << "\t"; 
+    rhsPointer++;
+    std::cout << *rhsPointer << "\n";
 }
 
 //void PrintVector(std::vector<TVar> vec, long long size, std::string arrayName, ArrayType ){
